@@ -1,0 +1,30 @@
+# 代码所有者配置
+# 详见: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# 全局代码所有者
+* @lihongjie0209
+
+# 核心Java代码
+/src/main/java/ @lihongjie0209
+
+# 测试代码
+/src/test/java/ @lihongjie0209
+
+# 构建和配置文件
+pom.xml @lihongjie0209
+/.github/ @lihongjie0209
+
+# 文档文件
+*.md @lihongjie0209
+/docs/ @lihongjie0209
+
+# 脚本文件
+*.sh @lihongjie0209
+*.bat @lihongjie0209
+
+# CI/CD配置
+/.github/workflows/ @lihongjie0209
+
+# 安全相关文件
+/.github/SECURITY.md @lihongjie0209
+/.github/RELEASE_CHECKLIST.md @lihongjie0209

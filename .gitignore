@@ -1,0 +1,77 @@
+# 编译产物
+target/
+*.jar
+*.war
+*.ear
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDE文件
+### IntelliJ IDEA ###
+.idea/
+*.iml
+*.ipr
+*.iws
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# 系统文件
+### Mac OS ###
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+~*
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+
+# 测试和代码质量工具
+jacoco.exec
+.sonar/
+target/site/
+target/jacoco/
+
+# Native libraries (这些会由CI自动下载)
+src/main/resources/native/*.dll
+src/main/resources/native/*.so  
+src/main/resources/native/*.dylib
+
+# 测试输出
+test-output/
+performance-results/
+
+# 备份文件
+*-OLD.md
+README-OLD.md
+
+# 发布临时文件
+release-assets/
+native-libraries.tar.gz

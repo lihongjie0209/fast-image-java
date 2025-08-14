@@ -1,0 +1,317 @@
+name: 🚀 Build and Release Fast Image Java
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      rust_version:
+        description: 'Rust release version to use (e.g., v0.2.1)'
+        required: false
+        default: 'latest'
+
+env:
+  JAVA_VERSION: '8'
+  MAVEN_VERSION: '3.8.6'
+  RUST_REPO: 'lihongjie0209/fast-image'
+
+jobs:
+  # 下载Rust原生库
+  download-native-libs:
+    name: 📥 Download Native Libraries
+    runs-on: ubuntu-latest
+    
+    outputs:
+      rust-version: ${{ steps.get-version.outputs.version }}
+      
+    steps:
+      - name: 🔍 Get Latest Rust Release
+        id: get-version
+        run: |
+          if [ "${{ github.event.inputs.rust_version }}" = "latest" ] || [ -z "${{ github.event.inputs.rust_version }}" ]; then
+            VERSION=$(curl -s https://api.github.com/repos/${{ env.RUST_REPO }}/releases/latest | jq -r .tag_name)
+          else
+            VERSION="${{ github.event.inputs.rust_version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using Rust version: $VERSION"
+          
+      - name: 📦 Download Native Libraries
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          echo "Downloading native libraries from version: $VERSION"
+          
+          # 创建目录
+          mkdir -p native-libs
+          
+          # 下载所有平台的原生库
+          PLATFORMS=(
+            "fast_image-windows-x86_64.dll"
+            "fast_image-windows-aarch64.dll"
+            "libfast_image-linux-x86_64.so"
+            "libfast_image-linux-aarch64.so"
+            "libfast_image-macos-x86_64.dylib"
+            "libfast_image-macos-aarch64.dylib"
+          )
+          
+          for platform in "${PLATFORMS[@]}"; do
+            echo "Downloading $platform..."
+            curl -L -f \
+              -H "Accept: application/octet-stream" \
+              -o "native-libs/$platform" \
+              "https://github.com/${{ env.RUST_REPO }}/releases/download/$VERSION/$platform" \
+              || echo "Warning: Failed to download $platform (may not exist in this release)"
+          done
+          
+          # 检查下载的文件
+          echo "Downloaded files:"
+          ls -la native-libs/
+          
+      - name: 🗜️ Create Native Libraries Archive
+        run: |
+          cd native-libs
+          tar -czf ../native-libraries.tar.gz *
+          cd ..
+          
+      - name: 📤 Upload Native Libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libraries
+          path: native-libraries.tar.gz
+          retention-days: 1
+
+  # 构建和测试
+  build-and-test:
+    name: 🔨 Build and Test
+    needs: download-native-libs
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        java: [8, 11, 17, 21]
+        
+    steps:
+      - name: 🛒 Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: ☕ Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'temurin'
+          
+      - name: 📥 Download Native Libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: native-libraries
+          
+      - name: 📂 Extract Native Libraries
+        shell: bash
+        run: |
+          # 创建资源目录
+          mkdir -p src/main/resources/native
+          
+          # 解压原生库到正确位置
+          tar -xzf native-libraries.tar.gz -C src/main/resources/native/
+          
+          # 显示文件结构
+          echo "Native libraries structure:"
+          find src/main/resources/native/ -type f -exec ls -la {} \;
+          
+      - name: 📦 Cache Maven Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+          
+      - name: 🔧 Compile Project
+        run: mvn clean compile test-compile
+        
+      - name: 🧪 Run Tests
+        run: mvn test
+        
+      - name: 📊 Run Performance Benchmark
+        run: mvn exec:java@benchmark
+        
+      - name: 📦 Package JAR
+        run: mvn package -DskipTests
+        
+      - name: 📤 Upload JAR Artifacts
+        if: matrix.java == 8  # 只上传Java 8的构建结果
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-${{ matrix.os }}
+          path: target/*.jar
+          retention-days: 30
+
+  # 发布版本
+  create-release:
+    name: 🎉 Create Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [download-native-libs, build-and-test]
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      packages: write
+      
+    steps:
+      - name: 🛒 Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: ☕ Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: 8
+          distribution: 'temurin'
+          
+      - name: 📥 Download Native Libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: native-libraries
+          
+      - name: 📂 Extract Native Libraries
+        run: |
+          mkdir -p src/main/resources/native
+          tar -xzf native-libraries.tar.gz -C src/main/resources/native/
+          
+      - name: 🏷️ Get Version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "rust_version=${{ needs.download-native-libs.outputs.rust-version }}" >> $GITHUB_OUTPUT
+          
+      - name: 📦 Build Release JAR
+        run: |
+          mvn clean package -DskipTests
+          
+          # 创建发布文件
+          mkdir -p release-assets
+          cp target/*.jar release-assets/
+          
+          # 创建源码包
+          git archive --format=zip --output=release-assets/fast-image-java-${{ steps.version.outputs.version }}-sources.zip HEAD
+          
+      - name: 📋 Generate Release Notes
+        id: release-notes
+        run: |
+          cat > release-notes.md << 'EOF'
+          # Fast Image Java ${{ steps.version.outputs.version }}
+          
+          ## 📦 Java Library for High-Performance Image Compression
+          
+          This release contains the Java JNI wrapper for the Fast Image compression library.
+          
+          ### 🚀 Features
+          - High-performance JPEG compression using Rust backend
+          - Cross-platform native library support (Windows/Linux/macOS)  
+          - Comprehensive performance benchmarking suite
+          - Easy-to-use API with quality control
+          
+          ### 📊 Performance Highlights
+          - **Compression Ratio**: 10-16% better than JDK ImageIO
+          - **Memory Efficiency**: 33% less memory usage
+          - **Cross-Platform**: Consistent results across all platforms
+          
+          ### 🔗 Dependencies
+          - **Native Libraries**: Built from [fast-image ${{ steps.version.outputs.rust-version }}](https://github.com/${{ env.RUST_REPO }}/releases/tag/${{ steps.version.outputs.rust-version }})
+          - **Java Version**: Java 8+
+          - **Platforms**: Windows (x64/ARM64), Linux (x64/ARM64), macOS (Intel/Apple Silicon)
+          
+          ### 📥 Download
+          - `fast-image-java-${{ steps.version.outputs.version }}.jar` - Complete library with native dependencies
+          - `fast-image-java-${{ steps.version.outputs.version }}-sources.zip` - Source code
+          
+          ### 🚀 Quick Start
+          ```java
+          import cn.lihongjie.image.FastImageUtils;
+          
+          // Load and compress an image
+          byte[] imageData = Files.readAllBytes(Paths.get("image.jpg"));
+          byte[] compressed = FastImageUtils.compress(imageData, 70);
+          
+          // Save compressed result
+          Files.write(Paths.get("compressed.jpg"), compressed);
+          ```
+          
+          ### 🧪 Performance Testing
+          ```bash
+          # Clone and test
+          git clone https://github.com/your-username/fast-image-java.git
+          cd fast-image-java
+          mvn exec:java@benchmark
+          ```
+          
+          ### 📚 Documentation
+          - [Performance Comparison Report](JPEG-COMPRESSION-COMPARISON.md)
+          - [Quick Decision Guide](DECISION-GUIDE.md)
+          - [Usage Guide](QUICK-GUIDE.md)
+          
+          Built with ❤️ using Rust + JNI
+          EOF
+          
+          # 设置输出
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          cat release-notes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+      - name: 🎉 Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "Fast Image Java ${{ steps.version.outputs.version }}"
+          body: ${{ steps.release-notes.outputs.notes }}
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 发布到Maven Central (可选)
+  publish-maven:
+    name: 📦 Publish to Maven Central
+    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-RELEASE')
+    needs: [download-native-libs, build-and-test]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🛒 Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: ☕ Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: 8
+          distribution: 'temurin'
+          server-id: ossrh
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          
+      - name: 📥 Download Native Libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: native-libraries
+          
+      - name: 📂 Extract Native Libraries
+        run: |
+          mkdir -p src/main/resources/native
+          tar -xzf native-libraries.tar.gz -C src/main/resources/native/
+          
+      - name: 🔑 Import GPG Key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          
+      - name: 📦 Deploy to Maven Central
+        run: mvn clean deploy -DskipTests
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
