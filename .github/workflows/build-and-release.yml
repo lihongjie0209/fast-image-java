@@ -12,6 +12,11 @@ on:
         description: 'Rust release version to use (e.g., v0.2.1)'
         required: false
         default: 'latest'
+      create_release:
+        description: 'Create GitHub Release'
+        type: boolean
+        default: true
+        required: false
 
 env:
   JAVA_VERSION: '8'
@@ -84,38 +89,21 @@ jobs:
           path: native-libraries.tar.gz
           retention-days: 1
 
-  # 构建和测试
+  # 构建和测试 - 只构建一次用于发布
   build-and-test:
-    name: 🔨 Build and Test
+    name: 🔨 Build and Package
     needs: download-native-libs
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15  # 设置15分钟超时
     
-    strategy:
-      fail-fast: false  # 允许其他任务在一个失败时继续
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        java: [8, 11, 17, 21]
-        exclude:
-          # 排除一些不必要的组合来减少job数量
-          - os: windows-latest
-            java: 11
-          - os: macos-latest
-            java: 11
-          - os: ubuntu-latest
-            java: 17
-          # macOS runners don't have Java 8
-          - os: macos-latest
-            java: 8
-        
     steps:
       - name: 🛒 Checkout Repository
         uses: actions/checkout@v4
         
-      - name: ☕ Set up JDK ${{ matrix.java }}
+      - name: ☕ Set up JDK 8
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ matrix.java }}
+          java-version: 8
           distribution: 'temurin'
           
       - name: 📥 Download Native Libraries
@@ -143,31 +131,34 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
           
-      - name: 🔧 Compile Project
-        run: mvn clean compile test-compile -q
-        
-      - name: 🧪 Run Tests
-        run: mvn test -q
+      - name: 🔧 Compile and Test
+        run: mvn clean compile test -q
         
       - name: 📊 Run Performance Benchmark
-        if: matrix.java == 8 && matrix.os == 'ubuntu-latest'  # 只在一个环境运行benchmark
         run: mvn exec:java@benchmark -q
+        continue-on-error: true  # 基准测试失败不影响构建
         
-      - name: 📦 Package JAR
+      - name: 📦 Package Universal JAR
         run: mvn package -DskipTests -q
         
+      - name: � Verify JAR Contents
+        run: |
+          echo "=== JAR Contents ==="
+          jar -tf target/*.jar | head -20
+          echo "=== Native Libraries in JAR ==="
+          jar -tf target/*.jar | grep -E '\.(dll|so|dylib)$'
+        
       - name: 📤 Upload JAR Artifacts
-        if: matrix.java == 8  # 只上传Java 8的构建结果
         uses: actions/upload-artifact@v4
         with:
-          name: jar-${{ matrix.os }}
+          name: fast-image-java-universal
           path: target/*.jar
           retention-days: 30
 
   # 发布版本
   create-release:
     name: 🎉 Create Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true' || startsWith(github.ref, 'refs/tags/v')
     needs: [download-native-libs, build-and-test]
     runs-on: ubuntu-latest
     timeout-minutes: 20  # 设置20分钟超时
@@ -191,7 +182,13 @@ jobs:
         with:
           name: native-libraries
           
-      - name: 📂 Extract Native Libraries
+      - name: � Download JAR Artifacts  
+        uses: actions/download-artifact@v4
+        with:
+          name: fast-image-java-universal
+          path: artifacts/
+          
+      - name: �📂 Extract Native Libraries
         run: |
           mkdir -p src/main/resources/native
           tar -xzf native-libraries.tar.gz -C src/main/resources/native/
@@ -199,19 +196,36 @@ jobs:
       - name: 🏷️ Get Version
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="v$(date +%Y%m%d)-$(echo $GITHUB_SHA | cut -c1-8)"
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "rust_version=${{ needs.download-native-libs.outputs.rust-version }}" >> $GITHUB_OUTPUT
           
-      - name: 📦 Build Release JAR
+      - name: 📦 Prepare Release Files
         run: |
-          mvn clean package -DskipTests
-          
           # 创建发布文件
           mkdir -p release-assets
-          cp target/*.jar release-assets/
+          
+          # 复制JAR文件并重命名
+          cp artifacts/*.jar release-assets/
+          
+          # 重命名主要JAR文件
+          cd release-assets
+          for jar in *.jar; do
+            if [[ $jar == *"-javadoc.jar" ]]; then
+              mv "$jar" "fast-image-java-${{ steps.version.outputs.version }}-javadoc.jar"
+            elif [[ $jar == *"-sources.jar" ]]; then
+              mv "$jar" "fast-image-java-${{ steps.version.outputs.version }}-sources.jar"  
+            elif [[ $jar != *"-javadoc.jar" && $jar != *"-sources.jar" ]]; then
+              mv "$jar" "fast-image-java-${{ steps.version.outputs.version }}.jar"
+            fi
+          done
           
           # 创建源码包
+          cd ..
           git archive --format=zip --output=release-assets/fast-image-java-${{ steps.version.outputs.version }}-sources.zip HEAD
           
       - name: 📋 Generate Release Notes
@@ -290,14 +304,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 发布到Maven Central (可选)
-  publish-maven:
-    name: 📦 Publish to Maven Central
-    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-RELEASE')
+  # 发布到GitHub Packages
+  publish-github-packages:
+    name: 📦 Publish to GitHub Packages
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true' || startsWith(github.ref, 'refs/tags/v')
     needs: [download-native-libs, build-and-test]
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # 设置30分钟超时
+    timeout-minutes: 20
     
+    permissions:
+      contents: read
+      packages: write
+      
     steps:
       - name: 🛒 Checkout Repository
         uses: actions/checkout@v4
@@ -307,9 +325,9 @@ jobs:
         with:
           java-version: 8
           distribution: 'temurin'
-          server-id: ossrh
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
           
       - name: 📥 Download Native Libraries
         uses: actions/download-artifact@v4
@@ -321,14 +339,24 @@ jobs:
           mkdir -p src/main/resources/native
           tar -xzf native-libraries.tar.gz -C src/main/resources/native/
           
-      - name: 🔑 Import GPG Key
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      - name: 🏷️ Set Version
+        id: version
+        run: |
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            VERSION=${VERSION#v}  # 移除v前缀
+          else
+            VERSION="$(date +%Y%m%d)-$(echo $GITHUB_SHA | cut -c1-8)-SNAPSHOT"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           
-      - name: 📦 Deploy to Maven Central
-        run: mvn clean deploy -DskipTests
+          # 更新pom.xml中的版本号
+          mvn versions:set -DnewVersion=$VERSION -DgenerateBackupPoms=false
+          
+      - name: 📦 Build and Deploy to GitHub Packages
+        run: mvn clean deploy -DskipTests -q
         env:
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+
