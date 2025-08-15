@@ -23,6 +23,7 @@ jobs:
   download-native-libs:
     name: 📥 Download Native Libraries
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # 设置10分钟超时
     
     outputs:
       rust-version: ${{ steps.get-version.outputs.version }}
@@ -88,11 +89,21 @@ jobs:
     name: 🔨 Build and Test
     needs: download-native-libs
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15  # 设置15分钟超时
     
     strategy:
+      fail-fast: false  # 允许其他任务在一个失败时继续
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         java: [8, 11, 17, 21]
+        exclude:
+          # 排除一些不必要的组合来减少job数量
+          - os: windows-latest
+            java: 11
+          - os: macos-latest
+            java: 11
+          - os: ubuntu-latest
+            java: 17
         
     steps:
       - name: 🛒 Checkout Repository
@@ -130,16 +141,17 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
           
       - name: 🔧 Compile Project
-        run: mvn clean compile test-compile
+        run: mvn clean compile test-compile -q
         
       - name: 🧪 Run Tests
-        run: mvn test
+        run: mvn test -q
         
       - name: 📊 Run Performance Benchmark
-        run: mvn exec:java@benchmark
+        if: matrix.java == 8 && matrix.os == 'ubuntu-latest'  # 只在一个环境运行benchmark
+        run: mvn exec:java@benchmark -q
         
       - name: 📦 Package JAR
-        run: mvn package -DskipTests
+        run: mvn package -DskipTests -q
         
       - name: 📤 Upload JAR Artifacts
         if: matrix.java == 8  # 只上传Java 8的构建结果
@@ -155,6 +167,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [download-native-libs, build-and-test]
     runs-on: ubuntu-latest
+    timeout-minutes: 20  # 设置20分钟超时
     
     permissions:
       contents: write
@@ -280,6 +293,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-RELEASE')
     needs: [download-native-libs, build-and-test]
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # 设置30分钟超时
     
     steps:
       - name: 🛒 Checkout Repository
