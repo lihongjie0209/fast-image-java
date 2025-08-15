@@ -104,6 +104,9 @@ jobs:
             java: 11
           - os: ubuntu-latest
             java: 17
+          # macOS runners don't have Java 8
+          - os: macos-latest
+            java: 8
         
     steps:
       - name: 🛒 Checkout Repository
