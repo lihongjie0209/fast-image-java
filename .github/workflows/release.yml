@@ -13,7 +13,7 @@ on:
 
 env:
   FAST_IMAGE_VERSION: v0.2.1
-  JAVA_VERSION: '8'
+  JAVA_VERSION: '11'
 
 jobs:
   prepare-release:
