@@ -333,7 +333,13 @@ jobs:
         
         # Compile and run the test
         javac -cp "$JAR_FILE" IntegrationTest.java
-        java -cp ".:$JAR_FILE" IntegrationTest
+        
+        # Use different classpath separator for Windows vs Unix
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          java -cp ".;$JAR_FILE" IntegrationTest
+        else
+          java -cp ".:$JAR_FILE" IntegrationTest
+        fi
 
   # Release-specific jobs (only run when is_release is true)
   test-release:
@@ -412,7 +418,13 @@ jobs:
         
         # Compile and run the test
         javac -cp "$JAR_FILE" ReleaseTest.java
-        java -cp ".:$JAR_FILE" ReleaseTest
+        
+        # Use different classpath separator for Windows vs Unix
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          java -cp ".;$JAR_FILE" ReleaseTest
+        else
+          java -cp ".:$JAR_FILE" ReleaseTest
+        fi
 
   create-release:
     name: Create GitHub Release
