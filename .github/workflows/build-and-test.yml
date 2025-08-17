@@ -572,7 +572,7 @@ jobs:
         GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
-        echo "$GPG_PRIVATE_KEY" | gpg --dearmor --batch --yes --import
+        echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
         gpg --list-secret-keys --keyid-format LONG
         
     - name: Publish to Maven Central
