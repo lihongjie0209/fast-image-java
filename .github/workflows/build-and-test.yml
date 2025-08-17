@@ -1,5 +1,11 @@
 name: Build, Test and Release
 
+# Permissions needed for the workflow
+permissions:
+  contents: write  # Required for creating releases and uploading artifacts
+  packages: write  # Required if publishing to GitHub Packages
+  actions: read    # Required for downloading artifacts
+
 on:
   push:
     branches: [ main, master, develop ]
