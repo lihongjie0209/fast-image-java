@@ -526,3 +526,81 @@ jobs:
         echo "- ✅ Ubuntu Linux" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Windows" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ macOS" >> $GITHUB_STEP_SUMMARY
+
+  publish-maven-central:
+    name: Publish to Maven Central
+    needs: [check-release, create-release]
+    if: needs.check-release.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        server-id: ossrh
+        server-username: MAVEN_USERNAME
+        server-password: MAVEN_PASSWORD
+        
+    - name: Download native libraries
+      uses: actions/download-artifact@v4
+      with:
+        name: native-libraries
+        path: src/main/resources/native/
+        
+    - name: Update version for release
+      run: |
+        # Update version in pom.xml
+        sed -i "s/<version>.*-SNAPSHOT<\/version>/<version>${{ needs.check-release.outputs.version }}<\/version>/" pom.xml
+        
+        echo "Updated pom.xml version:"
+        grep -A 2 -B 2 "<version>" pom.xml | head -n 5
+        
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Import GPG key
+      env:
+        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      run: |
+        echo "$GPG_PRIVATE_KEY" | gpg --dearmor --batch --yes --import
+        gpg --list-secret-keys --keyid-format LONG
+        
+    - name: Publish to Maven Central
+      env:
+        MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+        MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      run: |
+        echo "Publishing to Maven Central..."
+        mvn clean deploy -Pmaven-central -DperformRelease=true -Dgpg.passphrase="$GPG_PASSPHRASE"
+        
+    - name: Maven Central Summary
+      run: |
+        echo "## 📦 Maven Central Publication" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Group ID:** cn.lihongjie" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Artifact ID:** fast-image-java" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Version:** ${{ needs.check-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Maven Central Links" >> $GITHUB_STEP_SUMMARY
+        echo "- [Maven Central Search](https://search.maven.org/artifact/cn.lihongjie/fast-image-java/${{ needs.check-release.outputs.version }}/jar)" >> $GITHUB_STEP_SUMMARY
+        echo "- [Repository Page](https://repo1.maven.org/maven2/cn/lihongjie/fast-image-java/${{ needs.check-release.outputs.version }}/)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📝 Maven Dependency" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`xml" >> $GITHUB_STEP_SUMMARY
+        echo "<dependency>" >> $GITHUB_STEP_SUMMARY
+        echo "    <groupId>cn.lihongjie</groupId>" >> $GITHUB_STEP_SUMMARY
+        echo "    <artifactId>fast-image-java</artifactId>" >> $GITHUB_STEP_SUMMARY
+        echo "    <version>${{ needs.check-release.outputs.version }}</version>" >> $GITHUB_STEP_SUMMARY
+        echo "</dependency>" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
