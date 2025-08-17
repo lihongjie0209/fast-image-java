@@ -30,9 +30,16 @@ The test suite is designed to verify functionality across different platforms an
 
 ## 🚀 GitHub Workflows
 
-### 1. Build and Test (`build-and-test.yml`)
+### Build and Test (`build-and-test.yml`)
 
-**Trigger**: Push to main/master/develop, Pull requests
+**Trigger**: 
+- Automatic: Push to main/master/develop, Pull requests
+- Manual: GitHub Actions page with test mode selection
+
+**Test Modes**:
+- **Full** (default): Complete CI/CD pipeline with all steps
+- **Functional Only**: Skip JAR building and integration tests  
+- **Build Only**: Skip integration tests
 
 **Features**:
 - Downloads native libraries from fast-image releases
@@ -44,34 +51,20 @@ The test suite is designed to verify functionality across different platforms an
 **Jobs**:
 1. `download-native-libs` - Downloads and organizes native libraries
 2. `test-cross-platform` - Runs tests on each platform
-3. `build-jar` - Creates JAR with native libraries included
-4. `integration-test` - Tests the final JAR on each platform
+3. `build-jar` - Creates JAR with native libraries included (skipped in functional-only mode)
+4. `integration-test` - Tests the final JAR on each platform (skipped in functional-only and build-only modes)
 
-### 2. Release (`release.yml`)
+**Usage Examples**:
+```bash
+# Quick functional testing during development
+# GitHub -> Actions -> Build and Test -> Run workflow -> Select "Functional Only"
 
-**Trigger**: Git tags (`v*`), Manual workflow dispatch
+# Full pipeline for release preparation  
+# Automatically triggered on push to main, or manually select "Full"
 
-**Features**:
-- Automated release creation
-- Version management
-- Multi-platform testing before release
-- GitHub release with artifacts
-- Automatic asset upload
-
-**Artifacts**:
-- `fast-image-java-{version}.jar` - Main library
-- `fast-image-java-{version}-sources.jar` - Source code
-- `fast-image-java-{version}-javadoc.jar` - Documentation
-
-### 3. Functional Tests Only (`functional-tests.yml`)
-
-**Trigger**: Manual execution, Code changes
-
-**Features**:
-- Focused on functionality testing only
-- Excludes performance benchmarks
-- Detailed test reporting
-- Platform-specific summaries
+# Build verification only
+# Manually select "Build Only" to test packaging without integration tests
+```
 
 ## 🛠️ Running Tests Locally
 
