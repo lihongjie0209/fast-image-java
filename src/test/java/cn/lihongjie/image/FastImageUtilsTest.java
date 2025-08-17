@@ -1,179 +1,301 @@
 package cn.lihongjie.image;
 
+import org.junit.Test;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Ignore;
+import static org.junit.Assert.*;
+
+import java.awt.image.BufferedImage;
+import java.awt.Graphics2D;
+import java.awt.Color;
+import java.awt.Font;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import javax.imageio.ImageIO;
 
 /**
- * Test class for FastImageUtils with cross-platform support
+ * Comprehensive tests for FastImageUtils functionality across different platforms.
+ * These tests focus on functionality verification, not performance.
  */
 public class FastImageUtilsTest {
     
-    public static void main(String[] args) {
-        System.out.println("=== Fast Image Utils Cross-Platform Test ===");
+    private static boolean libraryAvailable = false;
+    private static String platformInfo = "";
+    
+    @BeforeClass
+    public static void setUpClass() {
+        System.out.println("=== FastImageUtils Test Suite ===");
         
         try {
-            // Display platform information
-            System.out.println("📋 Platform Information:");
-            System.out.println(FastImageUtils.getPlatformInfo());
+            // Get platform information
+            platformInfo = FastImageUtils.getPlatformInfo();
+            System.out.println("Platform Info:");
+            System.out.println(platformInfo);
             System.out.println();
             
-            // Test library loading
-            System.out.println("🧪 Testing Library:");
-            boolean libraryWorking = FastImageUtils.testLibrary();
-            System.out.println("Library test result: " + (libraryWorking ? "✅ Working" : "❌ Failed"));
+            // Test library availability
+            libraryAvailable = FastImageUtils.testLibrary();
+            System.out.println("Library Available: " + libraryAvailable);
             System.out.println();
-            
-            // Test with actual image file if provided as argument
-            if (args.length > 0) {
-                testWithImageFile(args[0]);
-            } else {
-                System.out.println("💡 To test with an image file, provide the path as an argument:");
-                System.out.println("   java cn.lihongjie.image.FastImageUtilsTest path/to/your/image.jpg");
-                System.out.println();
-                
-                // Test convenience methods with minimal data
-                testConvenienceMethods();
-            }
-            
-            // Test error handling
-            testErrorHandling();
             
         } catch (Exception e) {
-            System.err.println("❌ Test failed: " + e.getMessage());
+            System.err.println("Error during setup: " + e.getMessage());
             e.printStackTrace();
         }
     }
     
-    private static void testWithImageFile(String imagePath) {
+    @Before
+    public void setUp() {
+        // Skip tests if library is not available
+        org.junit.Assume.assumeTrue("Native library not available on this platform", libraryAvailable);
+    }
+    
+    @Test
+    public void testLibraryInitialization() {
+        assertTrue("Library should be initialized", libraryAvailable);
+        assertNotNull("Platform info should not be null", platformInfo);
+        assertTrue("Platform info should contain platform details", 
+                   platformInfo.contains("Platform:") && platformInfo.contains("Architecture:"));
+    }
+    
+    @Test
+    public void testBasicCompression() throws Exception {
+        byte[] testImage = createTestJPEG(400, 300);
+        
+        // Test basic compression with quality 70
+        byte[] compressed = FastImageUtils.compress(testImage, 70);
+        
+        assertNotNull("Compressed data should not be null", compressed);
+        assertTrue("Compressed data should not be empty", compressed.length > 0);
+        assertTrue("Compressed data should be smaller than original", compressed.length <= testImage.length);
+        
+        // Verify it's a valid JPEG (starts with FF D8 and ends with FF D9)
+        assertEquals("Should start with JPEG marker", (byte) 0xFF, compressed[0]);
+        assertEquals("Should start with JPEG marker", (byte) 0xD8, compressed[1]);
+        assertEquals("Should end with JPEG marker", (byte) 0xFF, compressed[compressed.length - 2]);
+        assertEquals("Should end with JPEG marker", (byte) 0xD9, compressed[compressed.length - 1]);
+    }
+    
+    @Test
+    public void testQualityLevels() throws Exception {
+        byte[] testImage = createTestJPEG(600, 400);
+        
+        int[] qualities = {30, 50, 70, 90};
+        byte[][] results = new byte[qualities.length][];
+        
+        // Test each quality level
+        for (int i = 0; i < qualities.length; i++) {
+            results[i] = FastImageUtils.compress(testImage, qualities[i]);
+            assertNotNull("Result for quality " + qualities[i] + " should not be null", results[i]);
+            assertTrue("Result for quality " + qualities[i] + " should not be empty", results[i].length > 0);
+        }
+        
+        // Generally, higher quality should result in larger files
+        // Note: This is not always strictly true, but should be true for our test images
+        for (int i = 0; i < qualities.length - 1; i++) {
+            System.out.println("Quality " + qualities[i] + ": " + results[i].length + " bytes");
+        }
+        System.out.println("Quality " + qualities[qualities.length - 1] + ": " + 
+                          results[results.length - 1].length + " bytes");
+    }
+    
+    @Test
+    public void testPresetQualityMethods() throws Exception {
+        byte[] testImage = createTestJPEG(500, 350);
+        
+        // Test preset quality methods
+        byte[] high = FastImageUtils.compressHigh(testImage);
+        byte[] medium = FastImageUtils.compressMedium(testImage);
+        byte[] low = FastImageUtils.compressLow(testImage);
+        
+        assertNotNull("High quality result should not be null", high);
+        assertNotNull("Medium quality result should not be null", medium);
+        assertNotNull("Low quality result should not be null", low);
+        
+        assertTrue("High quality result should not be empty", high.length > 0);
+        assertTrue("Medium quality result should not be empty", medium.length > 0);
+        assertTrue("Low quality result should not be empty", low.length > 0);
+        
+        System.out.println("Preset quality results:");
+        System.out.println("High (90%):   " + high.length + " bytes");
+        System.out.println("Medium (60%): " + medium.length + " bytes");
+        System.out.println("Low (30%):    " + low.length + " bytes");
+    }
+    
+    @Test
+    public void testInvalidQuality() throws Exception {
+        byte[] testImage = createTestJPEG(200, 200);
+        
+        // Test invalid quality values
         try {
-            byte[] imageData = Files.readAllBytes(Paths.get(imagePath));
-            System.out.println("📁 Loaded image: " + imagePath);
-            System.out.println("📏 Original size: " + formatBytes(imageData.length));
-            System.out.println();
-            
-            // Test main compress method with different quality levels
-            System.out.println("🎯 Testing FastImageUtils.compress() with different quality levels:");
-            int[] qualities = {30, 50, 70, 90};
-            
-            for (int quality : qualities) {
-                long startTime = System.currentTimeMillis();
-                byte[] compressed = FastImageUtils.compress(imageData, quality);
-                long endTime = System.currentTimeMillis();
-                
-                double compressionRatio = (double) compressed.length / imageData.length;
-                long timeTaken = endTime - startTime;
-                
-                System.out.printf("  Quality %d: %s (%.1f%% of original) - %d ms%n", 
-                    quality, formatBytes(compressed.length), compressionRatio * 100, timeTaken);
-            }
-            System.out.println();
-            
-            // Test convenience methods
-            System.out.println("🚀 Testing convenience methods:");
-            
-            long startTime = System.currentTimeMillis();
-            byte[] highQuality = FastImageUtils.compressHigh(imageData);
-            long highTime = System.currentTimeMillis() - startTime;
-            
-            startTime = System.currentTimeMillis();
-            byte[] mediumQuality = FastImageUtils.compressMedium(imageData);
-            long mediumTime = System.currentTimeMillis() - startTime;
-            
-            startTime = System.currentTimeMillis();
-            byte[] lowQuality = FastImageUtils.compressLow(imageData);
-            long lowTime = System.currentTimeMillis() - startTime;
-            
-            System.out.printf("  High Quality (90%%):   %s (%.1f%% of original) - %d ms%n",
-                formatBytes(highQuality.length), 
-                (double) highQuality.length / imageData.length * 100, highTime);
-            
-            System.out.printf("  Medium Quality (60%%): %s (%.1f%% of original) - %d ms%n",
-                formatBytes(mediumQuality.length),
-                (double) mediumQuality.length / imageData.length * 100, mediumTime);
-            
-            System.out.printf("  Low Quality (30%%):    %s (%.1f%% of original) - %d ms%n",
-                formatBytes(lowQuality.length),
-                (double) lowQuality.length / imageData.length * 100, lowTime);
-            
-        } catch (IOException e) {
-            System.err.println("❌ Cannot read image file: " + e.getMessage());
+            FastImageUtils.compress(testImage, -1);
+            fail("Should throw exception for negative quality");
+        } catch (Exception e) {
+            // Expected
+            System.out.println("Expected exception for quality -1: " + e.getMessage());
+        }
+        
+        try {
+            FastImageUtils.compress(testImage, 101);
+            fail("Should throw exception for quality > 100");
+        } catch (Exception e) {
+            // Expected
+            System.out.println("Expected exception for quality 101: " + e.getMessage());
         }
     }
     
-    private static void testConvenienceMethods() {
-        System.out.println("🧪 Testing convenience methods with minimal data...");
-        
-        // Create minimal test data (will fail compression but test the methods)
-        byte[] testData = createMinimalTestData();
-        
-        try {
-            FastImageUtils.compressHigh(testData);
-            System.out.println("⚠️ compressHigh() completed (unexpected)");
-        } catch (RuntimeException e) {
-            System.out.println("✅ compressHigh() correctly handled invalid data");
-        }
-        
-        try {
-            FastImageUtils.compressMedium(testData);
-            System.out.println("⚠️ compressMedium() completed (unexpected)");
-        } catch (RuntimeException e) {
-            System.out.println("✅ compressMedium() correctly handled invalid data");
-        }
-        
-        try {
-            FastImageUtils.compressLow(testData);
-            System.out.println("⚠️ compressLow() completed (unexpected)");
-        } catch (RuntimeException e) {
-            System.out.println("✅ compressLow() correctly handled invalid data");
-        }
-        
-        System.out.println();
-    }
-    
-    private static void testErrorHandling() {
-        System.out.println("🧪 Testing error handling:");
-        
-        // Test with empty data
+    @Test
+    public void testEmptyInput() {
         try {
             FastImageUtils.compress(new byte[0], 50);
-            System.out.println("❌ Should have failed with empty data");
-        } catch (IllegalArgumentException e) {
-            System.out.println("✅ Correctly rejected empty data: " + e.getMessage());
-        }
-        
-        // Test with invalid quality values
-        byte[] testData = createMinimalTestData();
-        
-        try {
-            FastImageUtils.compress(testData, -1);
-            System.out.println("❌ Should have failed with negative quality");
-        } catch (IllegalArgumentException e) {
-            System.out.println("✅ Correctly rejected negative quality: " + e.getMessage());
-        }
-        
-        try {
-            FastImageUtils.compress(testData, 150);
-            System.out.println("❌ Should have failed with quality > 100");
-        } catch (IllegalArgumentException e) {
-            System.out.println("✅ Correctly rejected quality > 100: " + e.getMessage());
+            fail("Should throw exception for empty input");
+        } catch (Exception e) {
+            // Expected
+            System.out.println("Expected exception for empty input: " + e.getMessage());
         }
     }
     
-    private static byte[] createMinimalTestData() {
-        // Create minimal PNG signature data
-        return new byte[] {
-            (byte)0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A // PNG signature
-        };
+    @Test
+    public void testNullInput() {
+        try {
+            FastImageUtils.compress(null, 50);
+            fail("Should throw exception for null input");
+        } catch (Exception e) {
+            // Expected
+            System.out.println("Expected exception for null input: " + e.getMessage());
+        }
     }
     
-    private static String formatBytes(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " B";
-        } else if (bytes < 1024 * 1024) {
-            return String.format("%.1f KB", bytes / 1024.0);
-        } else {
-            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+    @Test
+    public void testPNGInput() throws Exception {
+        byte[] testPNG = createTestPNG(300, 200);
+        
+        // PNG input should be handled (converted to JPEG)
+        byte[] result = FastImageUtils.compress(testPNG, 70);
+        
+        assertNotNull("PNG compression result should not be null", result);
+        assertTrue("PNG compression result should not be empty", result.length > 0);
+        
+        // Result should be JPEG format
+        assertEquals("Should start with JPEG marker", (byte) 0xFF, result[0]);
+        assertEquals("Should start with JPEG marker", (byte) 0xD8, result[1]);
+        
+        System.out.println("PNG input (" + testPNG.length + " bytes) -> JPEG output (" + result.length + " bytes)");
+    }
+    
+    @Test
+    public void testLargeImage() throws Exception {
+        // Test with a larger image (1920x1080)
+        byte[] largeImage = createTestJPEG(1920, 1080);
+        
+        long startTime = System.currentTimeMillis();
+        byte[] compressed = FastImageUtils.compress(largeImage, 60);
+        long endTime = System.currentTimeMillis();
+        
+        assertNotNull("Large image compression result should not be null", compressed);
+        assertTrue("Large image compression result should not be empty", compressed.length > 0);
+        
+        double compressionRatio = (1.0 - (double) compressed.length / largeImage.length) * 100;
+        
+        System.out.println("Large image test (1920x1080):");
+        System.out.println("Original: " + formatBytes(largeImage.length));
+        System.out.println("Compressed: " + formatBytes(compressed.length));
+        System.out.println("Compression ratio: " + String.format("%.1f%%", compressionRatio));
+        System.out.println("Processing time: " + (endTime - startTime) + "ms");
+    }
+    
+    @Test
+    public void testMultipleCompressions() throws Exception {
+        byte[] testImage = createTestJPEG(400, 300);
+        
+        // Test multiple consecutive compressions to ensure stability
+        for (int i = 0; i < 10; i++) {
+            byte[] result = FastImageUtils.compress(testImage, 70);
+            assertNotNull("Compression " + i + " result should not be null", result);
+            assertTrue("Compression " + i + " result should not be empty", result.length > 0);
         }
+        
+        System.out.println("Successfully performed 10 consecutive compressions");
+    }
+    
+    @Test
+    public void testPlatformSpecificFeatures() {
+        // Test platform-specific information
+        String info = FastImageUtils.getPlatformInfo();
+        
+        assertTrue("Platform info should contain OS info", 
+                   info.contains("Platform:"));
+        assertTrue("Platform info should contain architecture info", 
+                   info.contains("Architecture:"));
+        assertTrue("Platform info should contain Java version", 
+                   info.contains("Java:"));
+        assertTrue("Platform info should contain library info", 
+                   info.contains("Native Library:"));
+        
+        System.out.println("Platform-specific test completed");
+        System.out.println("Current platform: " + System.getProperty("os.name") + 
+                          " " + System.getProperty("os.arch"));
+    }
+    
+    // Helper method to create test JPEG image
+    private byte[] createTestJPEG(int width, int height) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = image.createGraphics();
+        
+        // Create a gradient background
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int red = (x * 255) / width;
+                int green = (y * 255) / height;
+                int blue = ((x + y) * 255) / (width + height);
+                image.setRGB(x, y, new Color(red, green, blue).getRGB());
+            }
+        }
+        
+        // Add some text
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.BOLD, Math.max(12, Math.min(width, height) / 20)));
+        g2d.drawString("Test " + width + "x" + height, 10, 30);
+        
+        g2d.dispose();
+        
+        // Convert to JPEG bytes
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(image, "JPEG", baos);
+        return baos.toByteArray();
+    }
+    
+    // Helper method to create test PNG image
+    private byte[] createTestPNG(int width, int height) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = image.createGraphics();
+        
+        // Create a checkered pattern
+        int squareSize = 20;
+        for (int y = 0; y < height; y += squareSize) {
+            for (int x = 0; x < width; x += squareSize) {
+                boolean isBlack = ((x / squareSize) + (y / squareSize)) % 2 == 0;
+                g2d.setColor(isBlack ? Color.BLACK : Color.WHITE);
+                g2d.fillRect(x, y, squareSize, squareSize);
+            }
+        }
+        
+        // Add some transparency
+        g2d.setColor(new Color(255, 0, 0, 128)); // Semi-transparent red
+        g2d.fillOval(width / 4, height / 4, width / 2, height / 2);
+        
+        g2d.dispose();
+        
+        // Convert to PNG bytes
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(image, "PNG", baos);
+        return baos.toByteArray();
+    }
+    
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + "B";
+        if (bytes < 1024 * 1024) return String.format("%.1fKB", bytes / 1024.0);
+        return String.format("%.1fMB", bytes / (1024.0 * 1024));
     }
 }

@@ -1,0 +1,263 @@
+name: Build and Test with Native Libraries
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  FAST_IMAGE_VERSION: v0.2.1
+  JAVA_VERSION: '8'
+
+jobs:
+  download-native-libs:
+    name: Download Native Libraries
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download and extract native libraries
+      run: |
+        echo "Downloading fast-image native libraries version ${{ env.FAST_IMAGE_VERSION }}"
+        
+        # Create resources/native directory
+        mkdir -p src/main/resources/native
+        
+        # Download the archive
+        curl -L -o fast-image-all-platforms.tar.gz \
+          "https://github.com/lihongjie0209/fast-image/releases/download/${{ env.FAST_IMAGE_VERSION }}/fast-image-all-platforms.tar.gz"
+        
+        # Extract and organize files
+        tar -xzf fast-image-all-platforms.tar.gz
+        
+        # Copy native libraries to resources
+        find . -name "*.dll" -o -name "*.so" -o -name "*.dylib" | while read file; do
+          echo "Copying $file to src/main/resources/native/"
+          cp "$file" src/main/resources/native/
+        done
+        
+        # List the files that were copied
+        echo "Native libraries copied:"
+        ls -la src/main/resources/native/
+        
+        # Verify we have all expected files
+        expected_files=(
+          "fast_image-windows-x86_64.dll"
+          "fast_image-windows-aarch64.dll"
+          "libfast_image-linux-x86_64.so"
+          "libfast_image-linux-aarch64.so"
+          "libfast_image-macos-x86_64.dylib"
+          "libfast_image-macos-aarch64.dylib"
+        )
+        
+        for file in "${expected_files[@]}"; do
+          if [ -f "src/main/resources/native/$file" ]; then
+            echo "✓ Found: $file"
+          else
+            echo "✗ Missing: $file"
+            exit 1
+          fi
+        done
+    
+    - name: Upload native libraries artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: native-libraries
+        path: src/main/resources/native/
+        retention-days: 1
+
+  test-cross-platform:
+    name: Test on ${{ matrix.os }}
+    needs: download-native-libs
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-13]
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: windows-latest
+            platform: windows-x86_64
+          - os: macos-latest
+            platform: macos-aarch64
+          - os: macos-13
+            platform: macos-x86_64
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Download native libraries
+      uses: actions/download-artifact@v4
+      with:
+        name: native-libraries
+        path: src/main/resources/native/
+        
+    - name: Verify native libraries
+      shell: bash
+      run: |
+        echo "Checking native libraries in src/main/resources/native/:"
+        ls -la src/main/resources/native/ || true
+        
+        # Check if the expected library for this platform exists
+        case "${{ matrix.platform }}" in
+          "linux-x86_64")
+            expected_lib="libfast_image-linux-x86_64.so"
+            ;;
+          "windows-x86_64")
+            expected_lib="fast_image-windows-x86_64.dll"
+            ;;
+          "macos-aarch64")
+            expected_lib="libfast_image-macos-aarch64.dylib"
+            ;;
+          "macos-x86_64")
+            expected_lib="libfast_image-macos-x86_64.dylib"
+            ;;
+        esac
+        
+        if [ -f "src/main/resources/native/$expected_lib" ]; then
+          echo "✓ Expected library found: $expected_lib"
+          file "src/main/resources/native/$expected_lib" || true
+        else
+          echo "✗ Expected library missing: $expected_lib"
+          exit 1
+        fi
+    
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Run platform-specific tests
+      run: |
+        mvn clean test -Dtest=FastImageUtilsTest -DfailIfNoTests=false
+      
+    - name: Run cross-platform functionality test
+      run: |
+        mvn clean test -Dtest=CrossPlatformTest -DfailIfNoTests=false
+
+  build-jar:
+    name: Build JAR with Native Libraries
+    needs: [download-native-libs, test-cross-platform]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Download native libraries
+      uses: actions/download-artifact@v4
+      with:
+        name: native-libraries
+        path: src/main/resources/native/
+        
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+    
+    - name: Build JAR
+      run: |
+        mvn clean package -DskipTests
+        
+    - name: Verify JAR contents
+      run: |
+        echo "Checking JAR contents..."
+        jar -tf target/fast-image-java-*.jar | grep -E "\.(dll|so|dylib)$" || true
+        
+        echo "JAR file info:"
+        ls -la target/fast-image-java-*.jar
+        
+    - name: Upload JAR artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: fast-image-java-jar
+        path: target/fast-image-java-*.jar
+        retention-days: 30
+
+  integration-test:
+    name: Integration Test on ${{ matrix.os }}
+    needs: build-jar
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Download JAR
+      uses: actions/download-artifact@v4
+      with:
+        name: fast-image-java-jar
+        path: ./
+        
+    - name: Test JAR functionality
+      shell: bash
+      run: |
+        # Find the JAR file
+        JAR_FILE=$(find . -name "fast-image-java-*.jar" | head -n 1)
+        echo "Testing JAR: $JAR_FILE"
+        
+        # Create a simple test
+        cat > IntegrationTest.java << 'EOF'
+        import cn.lihongjie.image.FastImageUtils;
+        
+        public class IntegrationTest {
+            public static void main(String[] args) {
+                try {
+                    System.out.println("=== Fast Image Java Integration Test ===");
+                    System.out.println(FastImageUtils.getPlatformInfo());
+                    
+                    boolean libraryWorking = FastImageUtils.testLibrary();
+                    System.out.println("Library working: " + libraryWorking);
+                    
+                    if (libraryWorking) {
+                        System.out.println("✓ Integration test PASSED");
+                        System.exit(0);
+                    } else {
+                        System.out.println("✗ Integration test FAILED");
+                        System.exit(1);
+                    }
+                } catch (Exception e) {
+                    System.out.println("✗ Integration test ERROR: " + e.getMessage());
+                    e.printStackTrace();
+                    System.exit(1);
+                }
+            }
+        }
+        EOF
+        
+        # Compile and run the test
+        javac -cp "$JAR_FILE" IntegrationTest.java
+        java -cp ".:$JAR_FILE" IntegrationTest

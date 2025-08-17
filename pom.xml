@@ -99,12 +99,35 @@
                 <configuration>
                     <includes>
                         <include>**/*Test.java</include>
-                        <include>**/*Benchmark.java</include>
+                        <include>**/*Tests.java</include>
                     </includes>
+                    <excludes>
+                        <!-- Exclude performance benchmark from normal tests -->
+                        <exclude>**/QuickBenchmark.java</exclude>
+                    </excludes>
                     <systemPropertyVariables>
                         <java.awt.headless>true</java.awt.headless>
                     </systemPropertyVariables>
+                    <!-- Continue testing even if some tests fail -->
+                    <testFailureIgnore>false</testFailureIgnore>
+                    <!-- Capture test output -->
+                    <redirectTestOutputToFile>false</redirectTestOutputToFile>
                 </configuration>
+                <executions>
+                    <!-- Separate execution for cross-platform tests -->
+                    <execution>
+                        <id>cross-platform-tests</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <includes>
+                                <include>**/CrossPlatformTest.java</include>
+                            </includes>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             
             <!-- 执行插件 - 可以直接运行QuickBenchmark -->
@@ -193,6 +216,28 @@
     </build>
     
     <profiles>
+        <!-- Performance测试配置 -->
+        <profile>
+            <id>benchmark</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${maven-surefire-plugin.version}</version>
+                        <configuration>
+                            <includes>
+                                <include>**/QuickBenchmark.java</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <java.awt.headless>true</java.awt.headless>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
         <!-- 发布配置 -->
         <profile>
             <id>release</id>
