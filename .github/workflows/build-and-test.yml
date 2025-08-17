@@ -542,7 +542,7 @@ jobs:
       with:
         java-version: ${{ env.JAVA_VERSION }}
         distribution: 'temurin'
-        server-id: ossrh
+        server-id: central
         server-username: MAVEN_USERNAME
         server-password: MAVEN_PASSWORD
         
@@ -577,24 +577,27 @@ jobs:
         
     - name: Publish to Maven Central
       env:
-        MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-        MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+        MAVEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+        MAVEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
-        echo "Publishing to Maven Central..."
-        mvn clean deploy -Pmaven-central -DperformRelease=true -Dgpg.passphrase="$GPG_PASSPHRASE"
+        echo "Publishing to Maven Central using central-publishing-maven-plugin..."
+        mvn clean deploy -Prelease -Dgpg.passphrase="$GPG_PASSPHRASE"
         
     - name: Maven Central Summary
       run: |
-        echo "## 📦 Maven Central Publication" >> $GITHUB_STEP_SUMMARY
+        echo "## 📦 Maven Central Publication (Modern Plugin)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Plugin:** central-publishing-maven-plugin v0.4.0" >> $GITHUB_STEP_SUMMARY
         echo "✅ **Group ID:** cn.lihongjie" >> $GITHUB_STEP_SUMMARY
         echo "✅ **Artifact ID:** fast-image-java" >> $GITHUB_STEP_SUMMARY
         echo "✅ **Version:** ${{ needs.check-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Auto Publish:** Enabled" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Maven Central Links" >> $GITHUB_STEP_SUMMARY
         echo "- [Maven Central Search](https://search.maven.org/artifact/cn.lihongjie/fast-image-java/${{ needs.check-release.outputs.version }}/jar)" >> $GITHUB_STEP_SUMMARY
         echo "- [Repository Page](https://repo1.maven.org/maven2/cn/lihongjie/fast-image-java/${{ needs.check-release.outputs.version }}/)" >> $GITHUB_STEP_SUMMARY
+        echo "- [Central Portal](https://central.sonatype.com/)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📝 Maven Dependency" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`xml" >> $GITHUB_STEP_SUMMARY
@@ -604,3 +607,9 @@ jobs:
         echo "    <version>${{ needs.check-release.outputs.version }}</version>" >> $GITHUB_STEP_SUMMARY
         echo "</dependency>" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 Required Secrets" >> $GITHUB_STEP_SUMMARY
+        echo "- \`CENTRAL_TOKEN_USERNAME\` - Maven Central username" >> $GITHUB_STEP_SUMMARY
+        echo "- \`CENTRAL_TOKEN_PASSWORD\` - Maven Central token" >> $GITHUB_STEP_SUMMARY
+        echo "- \`GPG_PRIVATE_KEY\` - GPG private key for signing" >> $GITHUB_STEP_SUMMARY
+        echo "- \`GPG_PASSPHRASE\` - GPG key passphrase" >> $GITHUB_STEP_SUMMARY
