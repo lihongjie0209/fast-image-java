@@ -171,17 +171,38 @@ public class FastImageUtilsTest {
     public void testPNGInput() throws Exception {
         byte[] testPNG = createTestPNG(300, 200);
         
-        // PNG input should be handled (converted to JPEG)
+        // PNG input should be compressed but remain as PNG format
         byte[] result = FastImageUtils.compress(testPNG, 70);
         
         assertNotNull("PNG compression result should not be null", result);
         assertTrue("PNG compression result should not be empty", result.length > 0);
         
-        // Result should be JPEG format
+        // Result should remain PNG format (input format = output format)
+        assertEquals("Should start with PNG signature", (byte) 0x89, result[0]);
+        assertEquals("Should start with PNG signature", (byte) 0x50, result[1]);
+        assertEquals("Should start with PNG signature", (byte) 0x4E, result[2]);
+        assertEquals("Should start with PNG signature", (byte) 0x47, result[3]);
+        
+        System.out.println("PNG input (" + testPNG.length + " bytes) -> PNG output (" + result.length + " bytes)");
+    }
+    
+    @Test
+    public void testJPEGInputOutputFormat() throws Exception {
+        byte[] testJPEG = createTestJPEG(300, 200);
+        
+        // JPEG input should be compressed but remain as JPEG format  
+        byte[] result = FastImageUtils.compress(testJPEG, 70);
+        
+        assertNotNull("JPEG compression result should not be null", result);
+        assertTrue("JPEG compression result should not be empty", result.length > 0);
+        
+        // Result should remain JPEG format (input format = output format)
         assertEquals("Should start with JPEG marker", (byte) 0xFF, result[0]);
         assertEquals("Should start with JPEG marker", (byte) 0xD8, result[1]);
+        assertEquals("Should end with JPEG marker", (byte) 0xFF, result[result.length - 2]);
+        assertEquals("Should end with JPEG marker", (byte) 0xD9, result[result.length - 1]);
         
-        System.out.println("PNG input (" + testPNG.length + " bytes) -> JPEG output (" + result.length + " bytes)");
+        System.out.println("JPEG input (" + testJPEG.length + " bytes) -> JPEG output (" + result.length + " bytes)");
     }
     
     @Test

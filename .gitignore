@@ -75,3 +75,5 @@ README-OLD.md
 # 发布临时文件
 release-assets/
 native-libraries.tar.gz
+
+src/main/resources/native/

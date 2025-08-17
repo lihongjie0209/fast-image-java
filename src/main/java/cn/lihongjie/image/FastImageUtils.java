@@ -182,11 +182,12 @@ public class FastImageUtils {
      * Compress image data with automatic format detection and quality control
      * 
      * This method automatically detects whether the input is PNG or JPEG format
-     * and applies the appropriate compression algorithm.
+     * and applies the appropriate compression algorithm. The output format will
+     * be the same as the input format (PNG input -> PNG output, JPEG input -> JPEG output).
      * 
-     * @param imageBytes Input image data as byte array
+     * @param imageBytes Input image data as byte array (PNG or JPEG format)
      * @param quality Compression quality (0-100, where 0 is highest compression, 100 is best quality)
-     * @return Compressed image data as byte array
+     * @return Compressed image data as byte array in the same format as input
      * @throws IllegalArgumentException if quality is not in range 0-100 or data is empty
      * @throws RuntimeException if compression fails or image format is unsupported
      */
@@ -197,19 +198,21 @@ public class FastImageUtils {
     
     /**
      * Compress image with high quality (quality = 90)
+     * Output format will be the same as input format.
      * 
-     * @param imageBytes Input image data
-     * @return Compressed image data
+     * @param imageBytes Input image data (PNG or JPEG format)
+     * @return Compressed image data in the same format as input
      */
     public static byte[] compressHigh(byte[] imageBytes) {
         return compress(imageBytes, 90);
     }
     
     /**
-     * Compress image with medium quality (quality = 60)  
+     * Compress image with medium quality (quality = 60)
+     * Output format will be the same as input format.
      * 
-     * @param imageBytes Input image data
-     * @return Compressed image data
+     * @param imageBytes Input image data (PNG or JPEG format)
+     * @return Compressed image data in the same format as input
      */
     public static byte[] compressMedium(byte[] imageBytes) {
         return compress(imageBytes, 60);
@@ -217,9 +220,10 @@ public class FastImageUtils {
     
     /**
      * Compress image with low quality for maximum compression (quality = 30)
+     * Output format will be the same as input format.
      * 
-     * @param imageBytes Input image data
-     * @return Compressed image data
+     * @param imageBytes Input image data (PNG or JPEG format)
+     * @return Compressed image data in the same format as input
      */
     public static byte[] compressLow(byte[] imageBytes) {
         return compress(imageBytes, 30);
