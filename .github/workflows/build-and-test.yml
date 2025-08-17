@@ -292,9 +292,15 @@ jobs:
     - name: Test JAR functionality
       shell: bash
       run: |
-        # Find the JAR file
-        JAR_FILE=$(find . -name "fast-image-java-*.jar" | head -n 1)
+        # Find the main JAR file (exclude sources and javadoc JARs)
+        JAR_FILE=$(find . -name "fast-image-java-*.jar" | grep -v sources | grep -v javadoc | head -n 1)
         echo "Testing JAR: $JAR_FILE"
+        
+        if [ -z "$JAR_FILE" ]; then
+          echo "No main JAR file found. Available files:"
+          ls -la *.jar || true
+          exit 1
+        fi
         
         # Create a simple test
         cat > IntegrationTest.java << 'EOF'
@@ -354,18 +360,18 @@ jobs:
     - name: Download release artifacts
       uses: actions/download-artifact@v4
       with:
-        name: fast-image-java-jar
+        name: release-artifacts
         path: ./
         
     - name: Test release JAR
       shell: bash
       run: |
-        # Find the main JAR file
-        JAR_FILE="fast-image-java-${{ needs.check-release.outputs.version }}.jar"
+        # Find the main JAR file (exclude sources and javadoc JARs)
+        JAR_FILE=$(find . -name "fast-image-java-*.jar" | grep -v sources | grep -v javadoc | head -n 1)
         
-        if [ ! -f "$JAR_FILE" ]; then
-          echo "JAR file not found: $JAR_FILE"
-          ls -la
+        if [ -z "$JAR_FILE" ]; then
+          echo "No main JAR file found. Available files:"
+          ls -la *.jar || true
           exit 1
         fi
         
