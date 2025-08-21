@@ -194,7 +194,7 @@ jobs:
       
     - name: Run cross-platform functionality test
       run: |
-        mvn clean test -Dtest=CrossPlatformTest -DfailIfNoTests=false
+        mvn clean test -Dtest=CrossPlatformUnitTest -DfailIfNoTests=false
 
   build-jar:
     name: Build JAR with Native Libraries
