@@ -8,12 +8,14 @@
     <artifactId>fast-image-java</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    
+
     <name>Fast Image Java</name>
-    <description>High-performance JPEG compression library with JNI support, featuring comprehensive benchmarking suite</description>
+    <description>High-performance JPEG compression library with JNI support, featuring comprehensive benchmarking
+        suite
+    </description>
     <url>https://github.com/lihongjie0209/fast-image-java</url>
     <inceptionYear>2025</inceptionYear>
-    
+
     <licenses>
         <license>
             <name>MIT License</name>
@@ -21,7 +23,7 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
-    
+
     <developers>
         <developer>
             <id>lihongjie0209</id>
@@ -34,14 +36,14 @@
             </roles>
         </developer>
     </developers>
-    
+
     <scm>
         <connection>scm:git:git://github.com/lihongjie0209/fast-image-java.git</connection>
         <developerConnection>scm:git:ssh://git@github.com:lihongjie0209/fast-image-java.git</developerConnection>
         <url>https://github.com/lihongjie0209/fast-image-java</url>
         <tag>HEAD</tag>
     </scm>
-    
+
     <issueManagement>
         <system>GitHub</system>
         <url>https://github.com/lihongjie0209/fast-image-java/issues</url>
@@ -52,7 +54,7 @@
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        
+
         <!-- Plugin versions -->
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.0.0</maven-surefire-plugin.version>
@@ -60,8 +62,10 @@
         <maven-javadoc-plugin.version>3.4.1</maven-javadoc-plugin.version>
         <maven-gpg-plugin.version>3.0.1</maven-gpg-plugin.version>
         <central-publishing-maven-plugin.version>0.4.0</central-publishing-maven-plugin.version>
-        <jacoco-maven-plugin.version>0.8.8</jacoco-maven-plugin.version>
-        
+
+        <!-- JMH version -->
+        <jmh.version>0.5.2</jmh.version>
+
         <!-- SonarCloud -->
         <sonar.organization>lihongjie0209</sonar.organization>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
@@ -74,10 +78,47 @@
             <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- JMH for performance benchmarking -->
+        <!-- https://mvnrepository.com/artifact/org.openjdk.jmh/jmh-core -->
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <version>1.37</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.openjdk.jmh/jmh-generator-annprocess -->
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <version>1.37</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
+        <testSourceDirectory>src/test/java</testSourceDirectory>
         <plugins>
+            <!-- Build Helper Plugin - Add additional test source directories -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.4.0</version>
+                <executions>
+                    <execution>
+                        <id>add-test-source</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/test/manual/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Maven编译插件 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -90,7 +131,7 @@
                     <showDeprecation>true</showDeprecation>
                 </configuration>
             </plugin>
-            
+
             <!-- Maven测试插件 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -98,58 +139,58 @@
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
                     <includes>
-                        <include>**/*Test.java</include>
-                        <include>**/*Tests.java</include>
+                        <!-- Only run unit tests by default -->
+                        <include>**/unit/**/*Test.java</include>
+                        <include>**/unit/**/*Tests.java</include>
                     </includes>
                     <excludes>
-                        <!-- Exclude performance benchmark from normal tests -->
+                        <!-- Exclude manual analysis and debugging tests -->
+                        <exclude>**/manual/**/*.java</exclude>
+                        <!-- Exclude performance tests from normal CI runs -->
+                        <exclude>**/performance/**/*.java</exclude>
+                        <!-- Exclude old test files that don't follow unit test pattern -->
                         <exclude>**/QuickBenchmark.java</exclude>
+                        <exclude>**/ImageCompressionBenchmark.java</exclude>
+                        <exclude>**/RotationExample.java</exclude>
+                        <!-- Exclude legacy test files in root image package -->
+                        <exclude>**/CrossPlatformTest.java</exclude>
+                        <exclude>**/FastImageUtilsTest.java</exclude>
+                        <exclude>**/RotationTest.java</exclude>
                     </excludes>
                     <systemPropertyVariables>
                         <java.awt.headless>true</java.awt.headless>
                     </systemPropertyVariables>
-                    <!-- Continue testing even if some tests fail -->
+                    <!-- Tests should fail if native library is not available -->
                     <testFailureIgnore>false</testFailureIgnore>
                     <!-- Capture test output -->
                     <redirectTestOutputToFile>false</redirectTestOutputToFile>
                 </configuration>
                 <executions>
-                    <!-- Separate execution for cross-platform tests -->
+                    <!-- Separate execution for performance tests -->
                     <execution>
-                        <id>cross-platform-tests</id>
-                        <phase>test</phase>
+                        <id>performance-tests</id>
+                        <phase>integration-test</phase>
                         <goals>
                             <goal>test</goal>
                         </goals>
                         <configuration>
                             <includes>
-                                <include>**/CrossPlatformTest.java</include>
+                                <include>**/performance/**/*Test.java</include>
+                                <include>**/performance/**/*Tests.java</include>
+                                <include>**/performance/**/*Benchmark.java</include>
                             </includes>
+                            <excludes>
+                                <exclude>**/unit/**/*.java</exclude>
+                            </excludes>
+                            <!-- Performance tests can be more tolerant of failures -->
+                            <testFailureIgnore>true</testFailureIgnore>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
-            
-            <!-- 执行插件 - 可以直接运行QuickBenchmark -->
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.1.0</version>
-                <configuration>
-                    <mainClass>cn.lihongjie.image.QuickBenchmark</mainClass>
-                    <classpathScope>test</classpathScope>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>benchmark</id>
-                        <configuration>
-                            <mainClass>cn.lihongjie.image.QuickBenchmark</mainClass>
-                            <classpathScope>test</classpathScope>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            
+
+            <!-- JMH Benchmark Plugin -->
+
             <!-- 源码插件 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -164,7 +205,7 @@
                     </execution>
                 </executions>
             </plugin>
-            
+
             <!-- Javadoc插件 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -184,28 +225,7 @@
                     </execution>
                 </executions>
             </plugin>
-            
-            <!-- JaCoCo代码覆盖率 -->
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <version>${jacoco-maven-plugin.version}</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>prepare-agent</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>report</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            
+
             <!-- SonarCloud扫描 -->
             <plugin>
                 <groupId>org.sonarsource.scanner.maven</groupId>
@@ -214,8 +234,88 @@
             </plugin>
         </plugins>
     </build>
-    
+
     <profiles>
+        <!-- Unit tests profile (default) -->
+        <profile>
+            <id>unit-tests</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/unit/**/*Test.java</include>
+                                <include>**/unit/**/*Tests.java</include>
+                            </includes>
+                            <excludes>
+                                <exclude>**/manual/**/*.java</exclude>
+                                <exclude>**/performance/**/*.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Performance tests profile -->
+        <profile>
+            <id>performance-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/performance/**/*Test.java</include>
+                                <include>**/performance/**/*Tests.java</include>
+                                <include>**/performance/**/*Benchmark.java</include>
+                            </includes>
+                            <excludes>
+                                <exclude>**/unit/**/*.java</exclude>
+                                <exclude>**/manual/**/*.java</exclude>
+                            </excludes>
+                            <!-- Performance tests can be more tolerant -->
+                            <testFailureIgnore>true</testFailureIgnore>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Manual analysis and debugging tests profile -->
+        <profile>
+            <id>manual-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/manual/**/*Test.java</include>
+                                <include>**/manual/**/*Tests.java</include>
+                                <include>**/manual/**/*Analysis*.java</include>
+                            </includes>
+                            <excludes>
+                                <exclude>**/unit/**/*.java</exclude>
+                                <exclude>**/performance/**/*.java</exclude>
+                            </excludes>
+                            <!-- Manual tests are for analysis, failures are expected -->
+                            <testFailureIgnore>true</testFailureIgnore>
+                            <!-- Show detailed output for analysis -->
+                            <redirectTestOutputToFile>false</redirectTestOutputToFile>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
         <!-- Performance测试配置 -->
         <profile>
             <id>benchmark</id>
@@ -237,7 +337,7 @@
                 </plugins>
             </build>
         </profile>
-        
+
         <!-- 发布配置 -->
         <profile>
             <id>release</id>
@@ -265,7 +365,7 @@
                             </execution>
                         </executions>
                     </plugin>
-                    
+
                     <!-- Central Publishing插件 -->
                     <plugin>
                         <groupId>org.sonatype.central</groupId>
@@ -281,8 +381,10 @@
                 </plugins>
             </build>
         </profile>
+
+        <!-- Performance testing profile -->
     </profiles>
-    
+
     <distributionManagement>
         <!-- Maven Central -->
         <repository>

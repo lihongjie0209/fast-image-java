@@ -53,7 +53,7 @@ public class FastImageUtils {
         String libraryName = getLibraryName(platform);
         
         try {
-            // Try to load library from resources
+            // Load library from resources
             loadLibraryFromResources(libraryName);
         } catch (Exception e) {
             throw new RuntimeException("Failed to load Fast Image native library for platform: " + platform, e);
@@ -153,6 +153,11 @@ public class FastImageUtils {
     }
     
     /**
+     * Load native library from project root directory (for development/testing)
+     * 
+     * @throws IOException if library loading fails
+     */
+    /**
      * Extract file extension from library name
      * 
      * @param libraryName Library file name
@@ -230,6 +235,101 @@ public class FastImageUtils {
     }
     
     /**
+     * Fast JPEG compression using Rust's native image library
+     * 
+     * This method provides faster JPEG compression compared to the standard compress() method,
+     * but may produce slightly larger files. It uses Rust's native image library instead of mozjpeg.
+     * The input image will be converted to JPEG format regardless of the input format.
+     * 
+     * @param imageBytes Input image data as byte array (any supported format)
+     * @param quality Compression quality (0-100, where 0 is highest compression, 100 is best quality)
+     * @return Compressed JPEG image data as byte array
+     * @throws IllegalArgumentException if quality is not in range 0-100 or data is empty
+     * @throws RuntimeException if compression fails
+     */
+    public static byte[] compressJpegFast(byte[] imageBytes, int quality) {
+        ensureInitialized();
+        return compressJpegFastNative(imageBytes, quality);
+    }
+    
+    /**
+     * Fast JPEG compression with high quality (quality = 90)
+     * 
+     * @param imageBytes Input image data
+     * @return Compressed JPEG image data
+     */
+    public static byte[] compressJpegFastHigh(byte[] imageBytes) {
+        return compressJpegFast(imageBytes, 90);
+    }
+    
+    /**
+     * Fast JPEG compression with medium quality (quality = 60)
+     * 
+     * @param imageBytes Input image data
+     * @return Compressed JPEG image data
+     */
+    public static byte[] compressJpegFastMedium(byte[] imageBytes) {
+        return compressJpegFast(imageBytes, 60);
+    }
+    
+    /**
+     * Fast JPEG compression with low quality (quality = 30)
+     * 
+     * @param imageBytes Input image data
+     * @return Compressed JPEG image data
+     */
+    public static byte[] compressJpegFastLow(byte[] imageBytes) {
+        return compressJpegFast(imageBytes, 30);
+    }
+    
+    /**
+     * Rotate image by specified angle
+     * 
+     * This method rotates the input image by the specified angle (90, 180, or 270 degrees clockwise).
+     * The output format will be the same as the input format (PNG input -> PNG output, JPEG input -> JPEG output).
+     * 
+     * @param imageBytes Input image data as byte array (PNG, JPEG, WebP, GIF, or BMP format)
+     * @param angle Rotation angle in degrees (must be 90, 180, or 270)
+     * @return Rotated image data as byte array in the same format as input
+     * @throws IllegalArgumentException if angle is not 90, 180, or 270, or if data is empty
+     * @throws RuntimeException if rotation fails or image format is unsupported
+     */
+    public static byte[] rotate(byte[] imageBytes, int angle) {
+        ensureInitialized();
+        return rotateNative(imageBytes, angle);
+    }
+    
+    /**
+     * Rotate image 90 degrees clockwise
+     * 
+     * @param imageBytes Input image data
+     * @return Rotated image data in the same format as input
+     */
+    public static byte[] rotate90(byte[] imageBytes) {
+        return rotate(imageBytes, 90);
+    }
+    
+    /**
+     * Rotate image 180 degrees
+     * 
+     * @param imageBytes Input image data
+     * @return Rotated image data in the same format as input
+     */
+    public static byte[] rotate180(byte[] imageBytes) {
+        return rotate(imageBytes, 180);
+    }
+    
+    /**
+     * Rotate image 270 degrees clockwise (90 degrees counter-clockwise)
+     * 
+     * @param imageBytes Input image data
+     * @return Rotated image data in the same format as input
+     */
+    public static byte[] rotate270(byte[] imageBytes) {
+        return rotate(imageBytes, 270);
+    }
+    
+    /**
      * Get information about the current platform and loaded library
      * 
      * @return Platform information string
@@ -281,6 +381,8 @@ public class FastImageUtils {
         }
     }
     
-    // Native method declaration
+    // Native method declarations
     private static native byte[] compressNative(byte[] imageBytes, int quality);
+    private static native byte[] compressJpegFastNative(byte[] imageBytes, int quality);
+    private static native byte[] rotateNative(byte[] imageBytes, int angle);
 }
