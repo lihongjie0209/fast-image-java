@@ -596,7 +596,7 @@ jobs:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
         echo "Publishing to Maven Central using central-publishing-maven-plugin..."
-        mvn clean deploy -Prelease -s settings.xml -Dgpg.passphrase="$GPG_PASSPHRASE"
+        mvn clean deploy -Prelease -s settings.xml -Dgpg.passphrase="$GPG_PASSPHRASE" -DskipTests 
         
     - name: Maven Central Summary
       run: |
