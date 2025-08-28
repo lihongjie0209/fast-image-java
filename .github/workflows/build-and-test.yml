@@ -21,7 +21,7 @@ on:
         default: ''
 
 env:
-  FAST_IMAGE_VERSION: v0.3.1
+  FAST_IMAGE_VERSION: v0.3.2
   JAVA_VERSION: '11'
 
 jobs:
