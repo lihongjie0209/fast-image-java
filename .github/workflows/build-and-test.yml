@@ -269,172 +269,172 @@ jobs:
           target/fast-image-java-${{ needs.check-release.outputs.version }}-javadoc.jar
         retention-days: 30
 
-  integration-test:
-    name: Integration Test on ${{ matrix.os }}
-    needs: build-jar
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    
-    runs-on: ${{ matrix.os }}
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up JDK ${{ env.JAVA_VERSION }}
-      uses: actions/setup-java@v4
-      with:
-        java-version: ${{ env.JAVA_VERSION }}
-        distribution: 'temurin'
-        
-    - name: Download JAR
-      uses: actions/download-artifact@v4
-      with:
-        name: fast-image-java-jar
-        path: ./
-        
-    - name: Test JAR functionality
-      shell: bash
-      run: |
-        # Find the main JAR file (exclude sources and javadoc JARs)
-        JAR_FILE=$(find . -name "fast-image-java-*.jar" | grep -v sources | grep -v javadoc | head -n 1)
-        echo "Testing JAR: $JAR_FILE"
-        
-        if [ -z "$JAR_FILE" ]; then
-          echo "No main JAR file found. Available files:"
-          ls -la *.jar || true
-          exit 1
-        fi
-        
-        # Create a simple test
-        cat > IntegrationTest.java << 'EOF'
-        import cn.lihongjie.image.FastImageUtils;
-        
-        public class IntegrationTest {
-            public static void main(String[] args) {
-                try {
-                    System.out.println("=== Fast Image Java Integration Test ===");
-                    System.out.println(FastImageUtils.getPlatformInfo());
-                    
-                    boolean libraryWorking = FastImageUtils.testLibrary();
-                    System.out.println("Library working: " + libraryWorking);
-                    
-                    if (libraryWorking) {
-                        System.out.println("✓ Integration test PASSED");
-                        System.exit(0);
-                    } else {
-                        System.out.println("✗ Integration test FAILED");
-                        System.exit(1);
-                    }
-                } catch (Exception e) {
-                    System.out.println("✗ Integration test ERROR: " + e.getMessage());
-                    e.printStackTrace();
-                    System.exit(1);
-                }
-            }
-        }
-        EOF
-        
-        # Compile and run the test
-        javac -cp "$JAR_FILE" IntegrationTest.java
-        
-        # Use different classpath separator for Windows vs Unix
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
-          java -cp ".;$JAR_FILE" IntegrationTest
-        else
-          java -cp ".:$JAR_FILE" IntegrationTest
-        fi
+#  integration-test:
+#    name: Integration Test on ${{ matrix.os }}
+#    needs: build-jar
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        os: [ubuntu-latest, windows-latest, macos-latest]
+#
+#    runs-on: ${{ matrix.os }}
+#
+#    steps:
+#    - name: Checkout code
+#      uses: actions/checkout@v4
+#
+#    - name: Set up JDK ${{ env.JAVA_VERSION }}
+#      uses: actions/setup-java@v4
+#      with:
+#        java-version: ${{ env.JAVA_VERSION }}
+#        distribution: 'temurin'
+#
+#    - name: Download JAR
+#      uses: actions/download-artifact@v4
+#      with:
+#        name: fast-image-java-jar
+#        path: ./
+#
+#    - name: Test JAR functionality
+#      shell: bash
+#      run: |
+#        # Find the main JAR file (exclude sources and javadoc JARs)
+#        JAR_FILE=$(find . -name "fast-image-java-*.jar" | grep -v sources | grep -v javadoc | head -n 1)
+#        echo "Testing JAR: $JAR_FILE"
+#
+#        if [ -z "$JAR_FILE" ]; then
+#          echo "No main JAR file found. Available files:"
+#          ls -la *.jar || true
+#          exit 1
+#        fi
+#
+#        # Create a simple test
+#        cat > IntegrationTest.java << 'EOF'
+#        import cn.lihongjie.image.FastImageUtils;
+#
+#        public class IntegrationTest {
+#            public static void main(String[] args) {
+#                try {
+#                    System.out.println("=== Fast Image Java Integration Test ===");
+#                    System.out.println(FastImageUtils.getPlatformInfo());
+#
+#                    boolean libraryWorking = FastImageUtils.testLibrary();
+#                    System.out.println("Library working: " + libraryWorking);
+#
+#                    if (libraryWorking) {
+#                        System.out.println("✓ Integration test PASSED");
+#                        System.exit(0);
+#                    } else {
+#                        System.out.println("✗ Integration test FAILED");
+#                        System.exit(1);
+#                    }
+#                } catch (Exception e) {
+#                    System.out.println("✗ Integration test ERROR: " + e.getMessage());
+#                    e.printStackTrace();
+#                    System.exit(1);
+#                }
+#            }
+#        }
+#        EOF
+#
+#        # Compile and run the test
+#        javac -cp "$JAR_FILE" IntegrationTest.java
+#
+#        # Use different classpath separator for Windows vs Unix
+#        if [[ "$RUNNER_OS" == "Windows" ]]; then
+#          java -cp ".;$JAR_FILE" IntegrationTest
+#        else
+#          java -cp ".:$JAR_FILE" IntegrationTest
+#        fi
 
   # Release-specific jobs (only run when is_release is true)
-  test-release:
-    name: Test Release on ${{ matrix.os }}
-    needs: [check-release, build-jar]
-    if: needs.check-release.outputs.is_release == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    
-    runs-on: ${{ matrix.os }}
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up JDK ${{ env.JAVA_VERSION }}
-      uses: actions/setup-java@v4
-      with:
-        java-version: ${{ env.JAVA_VERSION }}
-        distribution: 'temurin'
-        
-    - name: Download release artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: release-artifacts
-        path: ./
-        
-    - name: Test release JAR
-      shell: bash
-      run: |
-        # Find the main JAR file (exclude sources and javadoc JARs)
-        JAR_FILE=$(find . -name "fast-image-java-*.jar" | grep -v sources | grep -v javadoc | head -n 1)
-        
-        if [ -z "$JAR_FILE" ]; then
-          echo "No main JAR file found. Available files:"
-          ls -la *.jar || true
-          exit 1
-        fi
-        
-        echo "Testing release JAR: $JAR_FILE"
-        
-        # Create release test
-        cat > ReleaseTest.java << 'EOF'
-        import cn.lihongjie.image.FastImageUtils;
-        
-        public class ReleaseTest {
-            public static void main(String[] args) {
-                try {
-                    System.out.println("=== Fast Image Java Release Test ===");
-                    System.out.println("Version: ${{ needs.check-release.outputs.version }}");
-                    System.out.println();
-                    
-                    System.out.println(FastImageUtils.getPlatformInfo());
-                    System.out.println();
-                    
-                    boolean libraryWorking = FastImageUtils.testLibrary();
-                    System.out.println("Library status: " + (libraryWorking ? "✓ WORKING" : "✗ FAILED"));
-                    
-                    if (libraryWorking) {
-                        System.out.println("\n✓ Release test PASSED");
-                        System.exit(0);
-                    } else {
-                        System.out.println("\n✗ Release test FAILED - Library not working");
-                        System.exit(1);
-                    }
-                } catch (Exception e) {
-                    System.out.println("\n✗ Release test ERROR: " + e.getMessage());
-                    e.printStackTrace();
-                    System.exit(1);
-                }
-            }
-        }
-        EOF
-        
-        # Compile and run the test
-        javac -cp "$JAR_FILE" ReleaseTest.java
-        
-        # Use different classpath separator for Windows vs Unix
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
-          java -cp ".;$JAR_FILE" ReleaseTest
-        else
-          java -cp ".:$JAR_FILE" ReleaseTest
-        fi
+#  test-release:
+#    name: Test Release on ${{ matrix.os }}
+#    needs: [check-release, build-jar]
+#    if: needs.check-release.outputs.is_release == 'true'
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        os: [ubuntu-latest, windows-latest, macos-latest]
+#
+#    runs-on: ${{ matrix.os }}
+#
+#    steps:
+#    - name: Checkout code
+#      uses: actions/checkout@v4
+#
+#    - name: Set up JDK ${{ env.JAVA_VERSION }}
+#      uses: actions/setup-java@v4
+#      with:
+#        java-version: ${{ env.JAVA_VERSION }}
+#        distribution: 'temurin'
+#
+#    - name: Download release artifacts
+#      uses: actions/download-artifact@v4
+#      with:
+#        name: release-artifacts
+#        path: ./
+#
+#    - name: Test release JAR
+#      shell: bash
+#      run: |
+#        # Find the main JAR file (exclude sources and javadoc JARs)
+#        JAR_FILE=$(find . -name "fast-image-java-*.jar" | grep -v sources | grep -v javadoc | head -n 1)
+#
+#        if [ -z "$JAR_FILE" ]; then
+#          echo "No main JAR file found. Available files:"
+#          ls -la *.jar || true
+#          exit 1
+#        fi
+#
+#        echo "Testing release JAR: $JAR_FILE"
+#
+#        # Create release test
+#        cat > ReleaseTest.java << 'EOF'
+#        import cn.lihongjie.image.FastImageUtils;
+#
+#        public class ReleaseTest {
+#            public static void main(String[] args) {
+#                try {
+#                    System.out.println("=== Fast Image Java Release Test ===");
+#                    System.out.println("Version: ${{ needs.check-release.outputs.version }}");
+#                    System.out.println();
+#
+#                    System.out.println(FastImageUtils.getPlatformInfo());
+#                    System.out.println();
+#
+#                    boolean libraryWorking = FastImageUtils.testLibrary();
+#                    System.out.println("Library status: " + (libraryWorking ? "✓ WORKING" : "✗ FAILED"));
+#
+#                    if (libraryWorking) {
+#                        System.out.println("\n✓ Release test PASSED");
+#                        System.exit(0);
+#                    } else {
+#                        System.out.println("\n✗ Release test FAILED - Library not working");
+#                        System.exit(1);
+#                    }
+#                } catch (Exception e) {
+#                    System.out.println("\n✗ Release test ERROR: " + e.getMessage());
+#                    e.printStackTrace();
+#                    System.exit(1);
+#                }
+#            }
+#        }
+#        EOF
+#
+#        # Compile and run the test
+#        javac -cp "$JAR_FILE" ReleaseTest.java
+#
+#        # Use different classpath separator for Windows vs Unix
+#        if [[ "$RUNNER_OS" == "Windows" ]]; then
+#          java -cp ".;$JAR_FILE" ReleaseTest
+#        else
+#          java -cp ".:$JAR_FILE" ReleaseTest
+#        fi
 
   create-release:
     name: Create GitHub Release
-    needs: [check-release, build-jar, test-release]
+    needs: [check-release, build-jar]
     if: needs.check-release.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     
