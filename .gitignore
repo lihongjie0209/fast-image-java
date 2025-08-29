@@ -84,3 +84,9 @@ release-assets/
 native-libraries.tar.gz
 
 src/main/resources/native/
+
+*.dll
+*.so
+*.dylib
+
+*.dll.backup*
